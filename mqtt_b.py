@@ -1,7 +1,7 @@
 import paho.mqtt.client as mqtt
 
 # MQTT broker details (must match the broker on the Raspberry Pi)
-broker = "11.21.40.138"  # Replace with the IP address of your Raspberry Pi or MQTT broker
+broker = "172.17.0.1"  # Replace with the IP address of your Raspberry Pi or MQTT broker
 port = 1883               # Default MQTT port
 topic = "sensor/heart_rate"  # The topic to subscribe to
 
