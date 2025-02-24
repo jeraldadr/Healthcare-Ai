@@ -1,18 +1,21 @@
+import os
 from transformers import pipeline
 import torch
 import sys
 from transformers.pipelines.audio_utils import ffmpeg_microphone_live
 from huggingface_hub import HfFolder
 import requests
-from transformers import pipeline
-import torch
-import sys
-from transformers.pipelines.audio_utils import ffmpeg_microphone_live
 from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
 from datasets import load_dataset
+from dotenv import load_dotenv
+from elevenlabs.client import ElevenLabs
+from elevenlabs import play
 
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+#PREPROCESSING
+
 
 classifier = pipeline(
     "audio-classification", model="MIT/ast-finetuned-speech-commands-v2", device=device
@@ -22,6 +25,13 @@ transcriber = pipeline(
     "automatic-speech-recognition", model="openai/whisper-small.en", device=device
 )
 
+processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+
+model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts").to(device)
+vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan").to(device)
+
+embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
+speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
 
 def launch_fn(
     wake_word="marvin",
@@ -52,13 +62,10 @@ def launch_fn(
             if prediction["score"] > prob_threshold:
                 return True
 
-transcriber = pipeline(
-    "automatic-speech-recognition", model="openai/whisper-small.en", device=device
-)
+
 
 def transcribe(chunk_length_s=5.0, stream_chunk_s=1.0):
     sampling_rate = transcriber.feature_extractor.sampling_rate
-
     mic = ffmpeg_microphone_live(
         sampling_rate=sampling_rate,
         chunk_length_s=chunk_length_s,
@@ -84,25 +91,44 @@ def query(text, model_id="tiiuae/falcon-7b-instruct"):
     response = requests.post(api_url, headers=headers, json=payload)
     return response.json()[0]["generated_text"][len(text) + 1 :]
 
-processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+def tts(prompt):
+    load_dotenv()
 
-model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts").to(device)
-vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan").to(device)
+    client = ElevenLabs()
 
-embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
+    audio = client.text_to_speech.convert(
+        text=prompt,
+        voice_id="bIHbv24MWmeRgasZH58o",
+        model_id="eleven_multilingual_v2",
+        output_format="mp3_44100_128",
+    )
+
+    play(audio)
 
 
+
+"""
 def synthesise(text):
+    processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+
+    model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts").to(device)
+    vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan").to(device)
+
+    embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
+    speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
+
     inputs = processor(text=text, return_tensors="pt")
     speech = model.generate_speech(
         inputs["input_ids"].to(device), speaker_embeddings.to(device), vocoder=vocoder
     )
     return speech.cpu()
+"""
+
 if __name__ == '__main__':
-    launch_fn()
-    transcription = transcribe()
-    print(query(transcription))
+    tts("This is a test")
+    #launch_fn()
+    #transcription = transcribe()
+    #print(query(transcription))
 
     #audio = synthesise(response)
 

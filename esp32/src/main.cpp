@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <stdio.h>
+#include <ArduinoJson.h>
 
 // // Sensors
 
@@ -34,7 +35,7 @@ float max_X = 0;
 
 void setup(){
   
-
+  int trigger = 0;
   Serial.begin(9600);
   pinMode(ledPin, OUTPUT);  
 
@@ -50,14 +51,29 @@ void loop(){
  
 
 
-    if (!valid){
-    digitalWrite(ledPin, HIGH);}
-    bioData body = readBioData(bioHub); // biosensor needs 5-10s to start updating 
-  
-    if (receiveValidData(body)) // once the data is validated, send it to the "database" 
-    {
-      digitalWrite(ledPin, LOW);
-      valid = true;
+    if (Serial.available() > 0) {  // Check if data is available
+        String receivedData = Serial.readString();  // Read full incoming strin
+        if (receivedData == "ready"){
+        trigger = 1
+    digitalWrite(ledPin, HIGH);}}
+
+    bioData body = readBioData(bioHub); // biosensor needs 5-10s to start updating   
+    if (trigger == 1) {
+    // These constraints set arbitrary based on the test data received
+      if (body.heartRate > 40 && body.confidence > 40 && body.oxygen > 70){
+        if (body.status == 3){
+        // Create JSON
+        StaticJsonDocument<200> jsonDoc;
+        jsonDoc["Heartrate"] = body.heartRate;
+        jsonDoc["Oxygen"] = body.oxygen;
+
+        String json_str;
+        serializeJson(jsonDoc, json_str); 
+        Serial.print(json_str);
+        digitalWrite(ledPin, LOW);
+        trigger = 0;
+        }
+      }
     }
     unsigned long elapsedTime = (millis() - sittingTime) / 1000;
 
